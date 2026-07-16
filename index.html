@@ -1,1 +1,999 @@
 
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Deliver Quality Service — Interactive 3D Audio Book</title>
+  <style>
+    :root {
+      --bg: #0b192c;
+      --page: #1e3e62;
+      --page-back: #162c46;
+      --cyan: #00e5ff;
+      --pink: #ff4081;
+      --text: #e0e0e0;
+      --muted: #888;
+      --leaf-w: min(450px, 42vw);
+      --leaf-h: min(580px, 72vh);
+      --radius: 15px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      background: var(--bg);
+      color: #fff;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 16px;
+      overflow-x: hidden;
+    }
+
+    h1, h2, h3 {
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .app {
+      width: 100%;
+      max-width: 1000px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 8px;
+    }
+
+    .header h2 {
+      color: var(--cyan);
+      margin-bottom: 6px;
+    }
+
+    .header p {
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    /* Helper image style to support clean rendering */
+    .page-img {
+      width: 100%;
+      height: 120px;
+      object-fit: cover;
+      border-radius: 8px;
+      margin-bottom: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      flex-shrink: 0;
+    }
+
+    /* Double-width stage so the spine sits in the visual center */
+    .book-scene {
+      width: calc(var(--leaf-w) * 2);
+      height: var(--leaf-h);
+      max-width: 100%;
+      perspective: 1500px;
+      margin: 28px auto;
+      display: flex;
+      justify-content: center;
+      position: relative;
+    }
+
+    .book {
+      position: relative;
+      width: var(--leaf-w);
+      height: 100%;
+      transform-style: preserve-3d;
+      /* Spine at horizontal center: cover starts on the right half */
+      margin-left: 50%;
+    }
+
+    .leaf {
+      position: absolute;
+      inset: 0;
+      transform-origin: left center;
+      transform-style: preserve-3d;
+      transition: transform 1.2s cubic-bezier(0.25, 0.8, 0.25, 1);
+    }
+
+    .leaf.flipped {
+      transform: rotateY(-180deg) translateZ(3px);
+    }
+
+    .page-face {
+      position: absolute;
+      inset: 0;
+      backface-visibility: hidden;
+      padding: 28px 32px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+      border-radius: 0 var(--radius) var(--radius) 0;
+      border-left: 4px solid rgba(255, 255, 255, 0.15);
+      overflow-y: auto;
+      cursor: pointer;
+      outline: 3px solid transparent;
+      outline-offset: -3px;
+      transition: outline-color 0.2s ease;
+    }
+
+    .page-face.is-reading {
+      outline-color: var(--cyan);
+    }
+
+    .page-front {
+      background: var(--page);
+      z-index: 2;
+    }
+
+    .page-back {
+      background: var(--page-back);
+      transform: rotateY(180deg);
+      border-radius: var(--radius) 0 0 var(--radius);
+      border-right: 4px solid rgba(255, 255, 255, 0.15);
+      border-left: none;
+    }
+
+    .cover {
+      background: linear-gradient(135deg, #00e5ff 0%, #00838f 100%);
+      color: var(--bg);
+      text-align: center;
+      justify-content: center;
+      align-items: center;
+      border-left: none;
+      gap: 12px;
+    }
+
+    .cover h1 {
+      font-size: clamp(1.6rem, 4vw, 2.4rem);
+      line-height: 1.1;
+      text-shadow: 1px 1px 0 rgba(255, 255, 255, 0.4);
+    }
+
+    .cover .subtitle {
+      color: var(--bg);
+      font-weight: 700;
+      font-size: 1rem;
+    }
+
+    .cover.finale {
+      background: linear-gradient(135deg, #ff4081 0%, #9c27b0 100%);
+      color: #fff;
+    }
+
+    .cover.finale .subtitle,
+    .cover.finale .finale-copy {
+      color: #fff;
+    }
+
+    .cover.finale h1 {
+      text-shadow: none;
+      font-size: clamp(1.4rem, 3.5vw, 2rem);
+    }
+
+    .finale-copy {
+      max-width: 80%;
+      font-size: 1.05rem;
+      line-height: 1.6;
+      font-weight: 500;
+    }
+
+    .badge {
+      background: var(--bg);
+      color: var(--cyan);
+      padding: 10px 20px;
+      border-radius: 20px;
+      font-weight: bold;
+      font-size: 0.9rem;
+      margin-top: 12px;
+      letter-spacing: 1px;
+    }
+
+    .badge.light {
+      background: #fff;
+      color: var(--pink);
+    }
+
+    .page-title {
+      color: var(--cyan);
+      font-size: 1.25rem;
+      border-bottom: 3px solid var(--pink);
+      padding-bottom: 6px;
+      margin-bottom: 12px;
+      flex-shrink: 0;
+    }
+
+    .page-body {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      overflow-y: auto;
+    }
+
+    .content-box {
+      background: rgba(11, 25, 44, 0.7);
+      border-left: 4px solid var(--cyan);
+      padding: 12px 15px;
+      border-radius: 4px;
+    }
+
+    .content-box.accent {
+      border-left-color: var(--pink);
+      background: rgba(255, 64, 129, 0.15);
+    }
+
+    .content-box h3 {
+      color: var(--pink);
+      font-size: 0.95rem;
+      margin-bottom: 5px;
+    }
+
+    p, li {
+      font-size: 0.9rem;
+      line-height: 1.45;
+      color: var(--text);
+    }
+
+    strong {
+      color: #fff;
+    }
+
+    .vocab-word {
+      color: var(--cyan);
+      text-decoration: underline dashed var(--cyan);
+      cursor: help;
+      font-weight: bold;
+    }
+
+    .vocab-word:hover {
+      color: var(--pink);
+      text-decoration-color: var(--pink);
+    }
+
+    ul {
+      list-style: none;
+    }
+
+    ul li {
+      margin-bottom: 5px;
+      position: relative;
+      padding-left: 18px;
+    }
+
+    ul li::before {
+      content: "✦";
+      position: absolute;
+      left: 0;
+      color: var(--cyan);
+    }
+
+    .page-footer {
+      font-size: 0.8rem;
+      color: var(--muted);
+      text-align: right;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      padding-top: 8px;
+      margin-top: 10px;
+      flex-shrink: 0;
+    }
+
+    .page-footer.light {
+      color: #ddd;
+      border-top-color: rgba(255, 255, 255, 0.25);
+    }
+
+    .blank-back {
+      background: var(--bg);
+      pointer-events: none;
+    }
+
+    .controls {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-top: 8px;
+    }
+
+    button {
+      background: var(--cyan);
+      color: var(--bg);
+      border: none;
+      padding: 12px 28px;
+      font-size: 1rem;
+      font-weight: bold;
+      border-radius: 30px;
+      cursor: pointer;
+      transition: background 0.2s ease, transform 0.2s ease;
+      box-shadow: 0 4px 15px rgba(0, 229, 255, 0.3);
+      font-family: inherit;
+    }
+
+    button:hover {
+      background: #fff;
+      transform: translateY(-2px);
+    }
+
+    button:active {
+      transform: translateY(1px);
+    }
+
+    .page-indicator {
+      font-size: 1rem;
+      font-weight: bold;
+      color: var(--cyan);
+      letter-spacing: 1px;
+      min-width: 7rem;
+      text-align: center;
+    }
+
+    .enhancements {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .enhancements button {
+      background: var(--pink);
+      color: #fff;
+      padding: 10px 16px;
+      font-size: 0.85rem;
+      box-shadow: 0 4px 10px rgba(255, 64, 129, 0.2);
+    }
+
+    .enhancements button.active {
+      background: var(--cyan);
+      color: var(--bg);
+      box-shadow: 0 4px 10px rgba(0, 229, 255, 0.2);
+    }
+
+    .progress {
+      width: var(--leaf-w);
+      max-width: 90%;
+      height: 12px;
+      background: var(--page-back);
+      border-radius: 20px;
+      overflow: hidden;
+      margin-top: 16px;
+      box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.5);
+    }
+
+    .progress-bar {
+      height: 100%;
+      width: 0%;
+      background: var(--cyan);
+      transition: width 0.5s ease;
+    }
+
+    .popup {
+      position: fixed;
+      display: none;
+      z-index: 1000;
+      border-radius: 15px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    }
+
+    .popup.is-open {
+      display: block;
+    }
+
+    #vocabBox {
+      right: 30px;
+      bottom: 30px;
+      width: min(320px, calc(100vw - 40px));
+      background: var(--page);
+      border: 3px solid var(--cyan);
+      padding: 20px;
+    }
+
+    #vocabBox h3 {
+      color: var(--pink);
+      margin-bottom: 8px;
+    }
+
+    #vocabBox p {
+      margin-bottom: 15px;
+      font-size: 0.95rem;
+    }
+
+    #quizBox {
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: min(380px, calc(100vw - 40px));
+      background: var(--page-back);
+      border: 3px solid var(--pink);
+      padding: 25px;
+      border-radius: 20px;
+      box-shadow: 0 15px 40px rgba(0, 0, 0, 0.7);
+    }
+
+    #quizBox h2 {
+      color: var(--cyan);
+      font-size: 1.4rem;
+      margin-bottom: 12px;
+    }
+
+    #quizBox p {
+      font-size: 1rem;
+      margin-bottom: 15px;
+    }
+
+    #quizBox input {
+      width: 100%;
+      padding: 10px;
+      border-radius: 8px;
+      border: 2px solid var(--pink);
+      background: var(--bg);
+      color: #fff;
+      font-size: 1rem;
+      margin-bottom: 15px;
+      font-family: inherit;
+    }
+
+    .popup-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .popup button {
+      padding: 8px 15px;
+      font-size: 0.85rem;
+    }
+
+    @media (max-width: 720px) {
+      .book-scene {
+        width: var(--leaf-w);
+      }
+
+      .book {
+        margin-left: 0;
+      }
+
+      /* On narrow screens keep a single centered leaf; flipped pages stack in place */
+      .leaf.flipped {
+        transform: rotateY(-180deg);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <h2>Cosmetology Service Manual</h2>
+      <p>Click a page to hear it read aloud. Use the buttons or arrow keys to flip.</p>
+    </header>
+
+    <div class="book-scene" aria-label="Interactive 3D book">
+      <div class="book" id="book">
+
+        <div class="leaf" data-leaf="0" style="z-index: 6">
+          <div class="page-face page-front cover">
+            <img class="page-img" src="https://images.unsplash.com/photo-1560066984-138dadb4c035?auto=format&fit=crop&w=600&q=80" alt="Cosmetology communication">
+            <h1>Deliver Quality<br>Customer Service</h1>
+            <p class="subtitle">Cosmetology Education Resource</p>
+            <div class="badge">Click page to listen →</div>
+          </div>
+          <div class="page-face page-back">
+            <h2 class="page-title">01. Service &amp; Importance</h2>
+            <div class="page-body">
+              <img class="page-img" src="https://images.unsplash.com/photo-1521590832167-7bcbfaa6381f?auto=format&fit=crop&w=600&q=80" alt="Stylist workstation setting">
+              <div class="content-box">
+                <h3>What is Customer Service?</h3>
+                <p>Professional assistance, care, and attention provided before, during, and after a salon service. It combines technical skills, communication, and ethics.</p>
+              </div>
+              <div class="content-box">
+                <h3>Importance of Quality Service</h3>
+                <ul>
+                  <li>Builds trust and professional reputation.</li>
+                  <li>Encourages critical repeat business.</li>
+                  <li>Supports salon growth and profitability.</li>
+                  <li>Reduces customer complaints and conflicts.</li>
+                </ul>
+              </div>
+              <div class="content-box accent">
+                <h3>Milady Connection</h3>
+                <p>Customer retention depends just as much on the quality of the service experience as it does on technical results.</p>
+              </div>
+            </div>
+            <div class="page-footer">Page 1</div>
+          </div>
+        </div>
+
+        <div class="leaf" data-leaf="1" style="z-index: 5">
+          <div class="page-face page-front">
+            <h2 class="page-title">02. Understanding Customers</h2>
+            <div class="page-body">
+              <img class="page-img" src="https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?auto=format&fit=crop&w=600&q=80" alt="Consultation with a happy client">
+              <div class="content-box">
+                <h3><span class="vocab-word" data-term="Internal Customers">Internal Customers</span></h3>
+                <p>Individuals inside the organization (supervisors, managers, receptionists, and other cosmetologists) who rely on cooperation to do their jobs.</p>
+              </div>
+              <div class="content-box">
+                <h3><span class="vocab-word" data-term="External Customers">External Customers</span></h3>
+                <p>Individuals outside the organization (new, regular, walk-in, or scheduled clients) receiving salon services.</p>
+              </div>
+              <div class="content-box accent">
+                <h3>Special Needs Customers</h3>
+                <p>Treat all individuals affected by language barriers, disabilities, cultural or religious beliefs, age, or gender with dignity, fairness, and respect.</p>
+              </div>
+            </div>
+            <div class="page-footer">Page 2</div>
+          </div>
+          <div class="page-face page-back">
+            <h2 class="page-title">03. Language Barriers</h2>
+            <div class="page-body">
+              <img class="page-img" src="https://images.unsplash.com/photo-1516549655169-df83a0774514?auto=format&fit=crop&w=600&q=80" alt="Using visual guide aids for communication">
+              <div class="content-box accent">
+                <h3>Associated Challenges</h3>
+                <ul>
+                  <li>Misunderstanding of service options.</li>
+                  <li>Incorrect product usage or safety risks.</li>
+                  <li>Client dissatisfaction and stress.</li>
+                </ul>
+              </div>
+              <div class="content-box">
+                <h3>Professional Strategies</h3>
+                <ul>
+                  <li>Use simple, clear language without technical jargon.</li>
+                  <li>Employ clear physical demonstrations and visual aids.</li>
+                  <li>Confirm understanding and seek assistance when needed.</li>
+                </ul>
+              </div>
+            </div>
+            <div class="page-footer">Page 3</div>
+          </div>
+        </div>
+
+        <div class="leaf" data-leaf="2" style="z-index: 4">
+          <div class="page-face page-front">
+            <h2 class="page-title">04. Communication Skills</h2>
+            <div class="page-body">
+              <img class="page-img" src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=600&q=80" alt="Stylist listening to client needs actively">
+              <div class="content-box">
+                <h3>Verbal &amp; Non-Verbal Skills</h3>
+                <ul>
+                  <li><strong>Verbal:</strong> Clear, polite language, accurate explanations, and professional tone.</li>
+                  <li><strong>Non-Verbal:</strong> Eye contact, positive body language, and professional grooming.</li>
+                  <li><strong><span class="vocab-word" data-term="Active Listening">Active Listening</span>:</strong> Listen without interrupting, clarify details, and respond appropriately.</li>
+                </ul>
+              </div>
+              <div class="content-box accent">
+                <h3>Building <span class="vocab-word" data-term="Rapport">Rapport</span></h3>
+                <p>Rapport is a positive, trusting relationship. Build it by showing genuine interest, respecting boundaries, and being courteous.</p>
+              </div>
+            </div>
+            <div class="page-footer">Page 4</div>
+          </div>
+          <div class="page-face page-back">
+            <h2 class="page-title">05. The Client Journey</h2>
+            <div class="page-body">
+              <img class="page-img" src="https://images.unsplash.com/photo-1595425970377-c9703cf48b6d?auto=format&fit=crop&w=600&q=80" alt="Fully sanitized styling workspace">
+              <div class="content-box">
+                <h3>Step 1: Before the Service</h3>
+                <p>Greet the customer politely, confirm their needs and expectations, and prepare a fully sanitized workstation.</p>
+              </div>
+              <div class="content-box">
+                <h3>Step 2: During the Service</h3>
+                <p>Explain procedures step-by-step, check client comfort levels regularly, and strictly follow safety rules.</p>
+              </div>
+              <div class="content-box">
+                <h3>Step 3: After the Service</h3>
+                <p>Confirm client satisfaction, provide professional aftercare advice, and thank the customer warmly.</p>
+              </div>
+            </div>
+            <div class="page-footer">Page 5</div>
+          </div>
+        </div>
+
+        <div class="leaf" data-leaf="3" style="z-index: 3">
+          <div class="page-face page-front">
+            <h2 class="page-title">06. Challenging Clients</h2>
+            <div class="page-body">
+              <img class="page-img" src="https://images.unsplash.com/photo-1512496015851-a90fb38ba796?auto=format&fit=crop&w=600&q=80" alt="Attentive consultation to prevent misunderstandings">
+              <div class="content-box accent">
+                <h3>The Picky / Perfectionist Client</h3>
+                <p><strong>Behavior:</strong> Highly specific expectations; notices tiny details.</p>
+                <p><strong>Response:</strong> Listen carefully, clarify details <em>before</em> starting, confirm steps throughout, and avoid defensiveness.</p>
+              </div>
+              <div class="content-box">
+                <h3>The Conservative / Reserved Client</h3>
+                <p><strong>Behavior:</strong> Quiet, cautious, uncomfortable with sudden changes.</p>
+                <p><strong>Response:</strong> Use gentle communication, respect preferences, avoid pressure, and offer reassurance.</p>
+              </div>
+            </div>
+            <div class="page-footer">Page 6</div>
+          </div>
+          <div class="page-face page-back">
+            <h2 class="page-title">07. Challenging Clients (Cont.)</h2>
+            <div class="page-body">
+              <img class="page-img" src="https://images.unsplash.com/photo-1580618672591-eb180b1a973f?auto=format&fit=crop&w=600&q=80" alt="Professional conversation with a client">
+              <div class="content-box">
+                <h3>The Talkative Client</h3>
+                <p><strong>Behavior:</strong> Enjoys chatting; may distract you from your work.</p>
+                <p><strong>Response:</strong> Remain polite, gently steer focus back to the service, avoid oversharing, and manage your time.</p>
+              </div>
+              <div class="content-box accent">
+                <h3>The Dissatisfied Client</h3>
+                <p><strong>Behavior:</strong> Expresses anger or disappointment over service results.</p>
+                <p><strong>Response:</strong> Stay calm and respectful, listen without interrupting, apologize sincerely, and offer solutions within salon policies.</p>
+              </div>
+            </div>
+            <div class="page-footer">Page 7</div>
+          </div>
+        </div>
+
+        <div class="leaf" data-leaf="4" style="z-index: 2">
+          <div class="page-face page-front">
+            <h2 class="page-title">08. Complaints &amp; Feedback</h2>
+            <div class="page-body">
+              <img class="page-img" src="https://images.unsplash.com/photo-1552581234-2612b753ee93?auto=format&fit=crop&w=600&q=80" alt="Receiving direct customer feedback politely">
+              <div class="content-box">
+                <h3>Handling Salon Complaints</h3>
+                <p>View complaints as opportunities to learn. Practice sensitivity, courtesy, and active problem-solving, and document according to salon guidelines.</p>
+              </div>
+              <div class="content-box accent">
+                <h3>Monitoring Satisfaction</h3>
+                <p>Track quality by observing client reactions, asking for feedback directly, and watching client return rates.</p>
+              </div>
+              <div class="content-box">
+                <h3>Feedback Methods</h3>
+                <p>Gather praise, suggestions, or reviews via verbal communication, satisfaction surveys, or service records.</p>
+              </div>
+            </div>
+            <div class="page-footer">Page 8</div>
+          </div>
+          <div class="page-face page-back">
+            <h2 class="page-title">09. Records &amp; Ethics</h2>
+            <div class="page-body">
+              <img class="page-img" src="https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?auto=format&fit=crop&w=600&q=80" alt="Professional beauty consultation cards or records">
+              <div class="content-box">
+                <h3>Maintaining Customer Records</h3>
+                <p>Use client files to document services, preferred products and styling formulas, allergies, and feedback — always ethically.</p>
+              </div>
+              <div class="content-box accent">
+                <h3>Ethics &amp; Safety Responsibilities</h3>
+                <ul>
+                  <li>Maintain excellent sanitation standards.</li>
+                  <li>Protect client physical and chemical safety.</li>
+                  <li>Adhere to salon privacy and confidentiality.</li>
+                  <li>Ensure non-discriminatory service always.</li>
+                </ul>
+              </div>
+            </div>
+            <div class="page-footer">Page 9</div>
+          </div>
+        </div>
+
+        <div class="leaf" data-leaf="5" style="z-index: 1">
+          <div class="page-face page-front cover finale">
+            <img class="page-img" src="https://images.unsplash.com/photo-1516979187457-637abb4f9353?auto=format&fit=crop&w=600&q=80" alt="Success in professional cosmetology training">
+            <h1>Service Excellence</h1>
+            <p class="finale-copy">You have completed the full customer service study curriculum. Use these standards daily to build a successful cosmetology career!</p>
+            <div class="badge light">Congratulations!</div>
+            <div class="page-footer light">Complete</div>
+          </div>
+          <div class="page-face page-back blank-back" aria-hidden="true"></div>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="controls">
+      <button type="button" id="prevBtn">◀ Previous Page</button>
+      <span class="page-indicator" id="indicator">Leaf 1 of 6</span>
+      <button type="button" id="nextBtn">Next Page ▶</button>
+    </div>
+
+    <div class="enhancements">
+      <button type="button" id="soundBtn" class="active">🔊 Flip Sound ON</button>
+      <button type="button" id="voiceBtn" class="active">🎙 Voice ON</button>
+      <button type="button" id="readBtn">📖 Read This Page</button>
+      <button type="button" id="ambienceBtn">💇 Salon Ambience OFF</button>
+      <button type="button" id="quizBtn">📝 Quick Quiz</button>
+    </div>
+
+    <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+      <div class="progress-bar" id="progressBar"></div>
+    </div>
+  </div>
+
+  <div id="vocabBox" class="popup" role="dialog" aria-labelledby="vocabHeading">
+    <h3 id="vocabHeading">Cosmetology Term</h3>
+    <p id="vocabText"></p>
+    <div class="popup-actions">
+      <button type="button" id="vocabClose">Close</button>
+    </div>
+  </div>
+
+  <div id="quizBox" class="popup" role="dialog" aria-labelledby="quizHeading">
+    <h2 id="quizHeading">Quick Review</h2>
+    <p id="questionText"></p>
+    <input id="quizAnswer" type="text" placeholder="Type your answer" autocomplete="off">
+    <div class="popup-actions">
+      <button type="button" id="quizSubmit">Submit</button>
+      <button type="button" id="quizClose">Close</button>
+    </div>
+  </div>
+
+  <audio id="flipSound" preload="auto">
+    <source src="https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3" type="audio/mpeg">
+  </audio>
+  <audio id="salonAmbience" loop preload="auto">
+    <source src="https://assets.mixkit.co/active_storage/sfx/209/209-preview.mp3" type="audio/mpeg">
+  </audio>
+
+  <script>
+    const prevBtn = document.getElementById("prevBtn");
+    const nextBtn = document.getElementById("nextBtn");
+    const indicator = document.getElementById("indicator");
+    const progressBar = document.getElementById("progressBar");
+    const progress = progressBar.parentElement;
+
+    const flipSound = document.getElementById("flipSound");
+    const salonAmbience = document.getElementById("salonAmbience");
+    const soundBtn = document.getElementById("soundBtn");
+    const voiceBtn = document.getElementById("voiceBtn");
+    const readBtn = document.getElementById("readBtn");
+    const ambienceBtn = document.getElementById("ambienceBtn");
+    const quizBtn = document.getElementById("quizBtn");
+
+    const vocabBox = document.getElementById("vocabBox");
+    const vocabText = document.getElementById("vocabText");
+    const quizBox = document.getElementById("quizBox");
+    const questionText = document.getElementById("questionText");
+    const quizAnswer = document.getElementById("quizAnswer");
+
+    const leaves = [...document.querySelectorAll(".leaf")];
+    const totalLeaves = leaves.length;
+
+    let currentLeafIndex = 0;
+    let isSoundEnabled = true;
+    let isVoiceEnabled = true;
+    let isAmbiencePlaying = false;
+    let currentQuiz = null;
+
+    const vocabulary = {
+      "Internal Customers":
+        "Individuals working within the salon (supervisors, receptionists, other stylists) who rely on cooperation to complete their work.",
+      "External Customers":
+        "Individuals outside of the business who schedule appointments or purchase cosmetic retail products.",
+      "Active Listening":
+        "A communication skill where the stylist listens carefully without interrupting, clarifying facts to guarantee accurate services.",
+      "Rapport":
+        "A collaborative, positive, trusting relationship developed between a client and their cosmetology service provider."
+    };
+
+    const quizzes = [
+      { q: "What is the relationship built on trust between stylist and client?", a: "rapport" },
+      { q: "Who are customers working inside the salon, like receptionists?", a: "internal customers" },
+      { q: "What communication technique involves listening without interrupting?", a: "active listening" },
+      { q: "What retains clients just as much as technical service results?", a: "customer service" }
+    ];
+
+    function playFlipSound() {
+      if (!isSoundEnabled) return;
+      flipSound.currentTime = 0;
+      flipSound.play().catch(() => {});
+    }
+
+    function speakText(text, { force = false } = {}) {
+      if ((!isVoiceEnabled && !force) || !text) return;
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 1;
+      window.speechSynthesis.speak(utterance);
+    }
+
+    function faceText(face) {
+      if (!face || face.classList.contains("blank-back")) return "";
+      return face.innerText.replace(/\s+/g, " ").trim();
+    }
+
+    function clearReadingHighlight() {
+      document.querySelectorAll(".page-face.is-reading").forEach((el) => {
+        el.classList.remove("is-reading");
+      });
+    }
+
+    // Adjusting readable content parser to clean out alt tags/text from images
+    function readPageFace(face, { force = false } = {}) {
+      let text = faceText(face);
+      if (!text) return;
+
+      clearReadingHighlight();
+      face.classList.add("is-reading");
+      speakText(text, { force });
+
+      const clearWhenDone = () => {
+        face.classList.remove("is-reading");
+        window.speechSynthesis.removeEventListener("end", clearWhenDone);
+      };
+      // Highlight clears when speech ends (best-effort; some browsers are flaky)
+      const utteranceCheck = setInterval(() => {
+        if (!window.speechSynthesis.speaking) {
+          clearInterval(utteranceCheck);
+          face.classList.remove("is-reading");
+        }
+      }, 300);
+    }
+
+    function readCurrentVisibleContent({ force = false } = {}) {
+      // Cover (nothing flipped yet)
+      if (currentLeafIndex === 0) {
+        const cover = leaves[0].querySelector(".page-front");
+        readPageFace(cover, { force });
+        return;
+      }
+
+      // Prefer the left page of the open spread (just-revealed content)
+      const left = leaves[currentLeafIndex - 1].querySelector(".page-back");
+      if (faceText(left)) {
+        readPageFace(left, { force });
+        return;
+      }
+
+      const right = leaves[currentLeafIndex].querySelector(".page-front");
+      readPageFace(right, { force });
+    }
+
+    function updateUI({ autoRead = true } = {}) {
+      indicator.textContent = `Leaf ${currentLeafIndex + 1} of ${totalLeaves}`;
+      const percent = (currentLeafIndex / (totalLeaves - 1)) * 100;
+      progressBar.style.width = `${percent}%`;
+      progress.setAttribute("aria-valuenow", String(Math.round(percent)));
+
+      if (autoRead && isVoiceEnabled) {
+        setTimeout(() => readCurrentVisibleContent(), 800);
+      }
+    }
+
+    function setZAfterFlip(upToIndex) {
+      for (let i = 0; i <= upToIndex; i++) {
+        leaves[i].style.zIndex = String(i + 1);
+      }
+    }
+
+    function setZAfterUnflip(fromIndex) {
+      for (let i = fromIndex; i < totalLeaves; i++) {
+        leaves[i].style.zIndex = String(totalLeaves - i);
+      }
+    }
+
+    function turnNext() {
+      if (currentLeafIndex >= totalLeaves - 1) return;
+      playFlipSound();
+      leaves[currentLeafIndex].classList.add("flipped");
+      setZAfterFlip(currentLeafIndex);
+      currentLeafIndex += 1;
+      updateUI();
+    }
+
+    function turnPrev() {
+      if (currentLeafIndex <= 0) return;
+      playFlipSound();
+      currentLeafIndex -= 1;
+      leaves[currentLeafIndex].classList.remove("flipped");
+      setZAfterUnflip(currentLeafIndex);
+      updateUI();
+    }
+
+    nextBtn.addEventListener("click", turnNext);
+    prevBtn.addEventListener("click", turnPrev);
+
+    // Click a visible page to hear only that page
+    document.querySelectorAll(".page-face").forEach((face) => {
+      face.addEventListener("click", (e) => {
+        if (e.target.closest(".vocab-word") || e.target.tagName === 'IMG') return;
+        e.stopPropagation();
+        readPageFace(face, { force: true });
+      });
+    });
+
+    document.querySelectorAll(".vocab-word").forEach((item) => {
+      item.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const term = item.getAttribute("data-term");
+        if (!vocabulary[term]) return;
+        vocabText.innerHTML = `<strong>${term}:</strong> ${vocabulary[term]}`;
+        vocabBox.classList.add("is-open");
+      });
+    });
+
+    function closeVocab() {
+      vocabBox.classList.remove("is-open");
+    }
+
+    function closeQuiz() {
+      quizBox.classList.remove("is-open");
+    }
+
+    function checkAnswer() {
+      if (!currentQuiz) return;
+      const userAns = quizAnswer.value.trim().toLowerCase();
+      if (userAns === currentQuiz.a) {
+        alert("Correct! Well done!");
+        closeQuiz();
+      } else {
+        const hint = currentQuiz.a.charAt(0).toUpperCase();
+        alert(`Incorrect. Try again! (Hint: It starts with "${hint}")`);
+      }
+    }
+
+    document.getElementById("vocabClose").addEventListener("click", closeVocab);
+    document.getElementById("quizClose").addEventListener("click", closeQuiz);
+    document.getElementById("quizSubmit").addEventListener("click", checkAnswer);
+
+    quizAnswer.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") checkAnswer();
+    });
+
+    quizBtn.addEventListener("click", () => {
+      currentQuiz = quizzes[Math.floor(Math.random() * quizzes.length)];
+      questionText.textContent = currentQuiz.q;
+      quizAnswer.value = "";
+      quizBox.classList.add("is-open");
+      quizAnswer.focus();
+    });
+
+    soundBtn.addEventListener("click", () => {
+      isSoundEnabled = !isSoundEnabled;
+      soundBtn.classList.toggle("active", isSoundEnabled);
+      soundBtn.textContent = isSoundEnabled ? "🔊 Flip Sound ON" : "🔇 Flip Sound OFF";
+    });
+
+    voiceBtn.addEventListener("click", () => {
+      isVoiceEnabled = !isVoiceEnabled;
+      voiceBtn.classList.toggle("active", isVoiceEnabled);
+      voiceBtn.textContent = isVoiceEnabled ? "🎙 Voice ON" : "🔇 Voice OFF";
+      if (!isVoiceEnabled) window.speechSynthesis.cancel();
+    });
+
+    readBtn.addEventListener("click", () => {
+      readCurrentVisibleContent({ force: true });
+    });
+
+    ambienceBtn.addEventListener("click", () => {
+      isAmbiencePlaying = !isAmbiencePlaying;
+      ambienceBtn.classList.toggle("active", isAmbiencePlaying);
+      if (isAmbiencePlaying) {
+        salonAmbience.play().catch(() => {});
+        ambienceBtn.textContent = "💇 Salon Ambience ON";
+      } else {
+        salonAmbience.pause();
+        ambienceBtn.textContent = "💇 Salon Ambience OFF";
+      }
+    });
+
+    document.addEventListener("keydown", (e) => {
+      if (e.target.matches("input, textarea")) return;
+      if (e.key === "ArrowRight") turnNext();
+      if (e.key === "ArrowLeft") turnPrev();
+      if (e.key === "Escape") {
+        closeVocab();
+        closeQuiz();
+      }
+    });
+
+    // Don't auto-read the cover on first load — wait for a page click or flip
+    updateUI({ autoRead: false });
+  </script>
+</body>
+</html>
